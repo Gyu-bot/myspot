@@ -77,8 +77,9 @@ place-db/
 │   │   ├── llm/                 # LLM Provider 추상화
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py          # 추상 LLM 인터페이스
-│   │   │   ├── openai_llm.py    # GPT-4o-mini 등
-│   │   │   ├── anthropic_llm.py # Claude
+│   │   │   ├── gemini_llm.py    # Gemini
+│   │   │   ├── openai_llm.py    # OpenAI LLM
+│   │   │   ├── anthropic_llm.py # Anthropic Claude
 │   │   │   └── router.py        # Provider 선택 로직
 │   │   │
 │   │   └── utils/

@@ -22,7 +22,7 @@ AI Agent ────────┘
 (API Key 인증)
                   │
                   ├──▶ OpenAI (임베딩: text-embedding-3-small)
-                  ├──▶ LLM Provider (Claude / GPT-4o-mini / 등, 런타임 선택)
+                  ├──▶ LLM Provider (Gemini 기본 + OpenAI/Anthropic 등 교체 가능)
                   ├──▶ 카카오 로컬 API (Geocoding, 장소 검색)
                   ├──▶ 네이버 검색 API (지역 검색)
                   └──▶ Google Places API (place_id 조회)
@@ -69,6 +69,7 @@ AI Agent ────────┘
 
 - **LLM Provider는 추상화** — `app/llm/base.py`의 인터페이스를 구현. 새 Provider 추가 시 기존 코드 수정 없이 가능해야 함.
 - **임베딩은 OpenAI text-embedding-3-small 고정** (MVP).
+- **비임베딩 LLM은 Provider 교체 가능** — MVP 기본값은 `gemini`, 필요 시 `openai`/`anthropic` 등으로 런타임 전환 가능해야 함.
 - **임베딩 생성 타이밍**: Place 생성/수정 시 1회. 임베딩 대상 텍스트 = `canonical_name + address + tags(joined) + notes(joined)`.
 - **검색 시 질의 임베딩**: 사용자 질의를 동일 모델로 임베딩 → cosine similarity.
 - **LLM 요약은 사용자 요청 시에만 실행** (비용 절약). 자동 실행 OFF가 기본.
@@ -110,7 +111,7 @@ AI Agent ────────┘
 ### Phase 0: 프로젝트 셋업
 **목표**: 프로젝트 뼈대, 의존성, DB 연결 확인
 
-1. `backend/pyproject.toml` 생성 — 의존성: fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, alembic, pgvector, geoalchemy2, pydantic-settings, httpx, openai
+1. `backend/pyproject.toml` 생성 — 의존성: fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, alembic, pgvector, geoalchemy2, pydantic-settings, httpx, openai, google-genai, anthropic
 2. `frontend/package.json` 생성 — 의존성: react, react-dom, react-router-dom, @tanstack/react-query, tailwindcss, vite, typescript
 3. `.env.example` 생성 — 필요한 환경변수 목록
 4. `docker-compose.yml` — 로컬 개발용 PostgreSQL + pgvector + PostGIS (Supabase 다운 시 대비)
@@ -155,7 +156,7 @@ AI Agent ────────┘
 1. OntologyNode/Relation 모델 + CRUD
 2. 온톨로지 시드 데이터 생성 (`seeds/ontology_seed.py`) — LLM으로 한국 맛집/카페 도메인 트리 생성
 3. 온톨로지 확장 검색 — "파스타" → "이탈리안" → "양식" 확장
-4. LLM Provider 추상화 (`llm/base.py`, `llm/openai_llm.py`, `llm/anthropic_llm.py`)
+4. LLM Provider 추상화 (`llm/base.py`, `llm/gemini_llm.py`, `llm/openai_llm.py`, `llm/anthropic_llm.py`)
 5. LLM 라우터 (`llm/router.py`) — 설정/요청별 Provider 선택
 6. Tool 엔드포인트 (`api/v1/tools.py`):
    - `search_places` — 검색
@@ -189,7 +190,7 @@ AI Agent ────────┘
 | `search_service.py` | 하이브리드 검색, 필터, 랭킹, 결과 설명 | embedding_service, ontology_service |
 | `enrichment_service.py` | 외부 API로 장소 정보 런타임 조회 (저장 안 함) | naver, kakao, google_places providers |
 | `ontology_service.py` | 온톨로지 CRUD, 트리 탐색, 확장 검색 | models |
-| `llm_service.py` | 질의 파싱, 요약 생성, 비교표, 동선 | llm router |
+| `llm_service.py` | 질의 파싱, 요약 생성, 비교표, 동선 | gemini llm router |
 
 ---
 
@@ -205,10 +206,12 @@ API_KEY=your-api-key-here
 # OpenAI
 OPENAI_API_KEY=sk-...
 
-# LLM (선택적 — 사용할 Provider만)
+# Gemini (LLM)
+GEMINI_API_KEY=...
+# Anthropic (선택)
 ANTHROPIC_API_KEY=sk-ant-...
-# 기본 LLM Provider: openai | anthropic
-DEFAULT_LLM_PROVIDER=openai
+# 기본 LLM Provider: gemini | openai | anthropic
+DEFAULT_LLM_PROVIDER=gemini
 
 # 네이버
 NAVER_CLIENT_ID=...
