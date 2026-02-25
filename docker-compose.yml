@@ -1,0 +1,27 @@
+version: "3.8"
+
+# 로컬 개발용 PostgreSQL + pgvector + PostGIS
+# Supabase 다운 시 또는 로컬 전환 시 사용
+# 실행: docker compose up -d
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: placedb-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: placedb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -1,0 +1,44 @@
+[project]
+name = "place-db"
+version = "0.1.0"
+description = "개인 장소 DB + LLM 시맨틱 서치 백엔드"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pgvector>=0.3.6",
+    "geoalchemy2>=0.15.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "openai>=1.60.0",
+    "anthropic>=0.42.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+    "httpx",  # TestClient용
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["alembic/versions/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
