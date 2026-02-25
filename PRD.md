@@ -20,7 +20,7 @@
 | 프론트엔드 | React SPA (TypeScript + Vite + Tailwind) | |
 | 에이전트 연동 | FastAPI REST API (나중에 MCP/Skill 확장) | |
 | 임베딩 | OpenAI text-embedding-3-small (1536d) | 고정 |
-| LLM | Provider 선택 가능 (GPT-4o-mini / Claude 등) | 추상화 레이어 필수 |
+| LLM | Provider 교체 가능 (Gemini 기본, OpenAI/Anthropic 등) | 추상화 레이어 필수 |
 | 지도 | MVP에서 제외 | V1에서 네이버 지도 추가 예정 |
 | 인증 | API Key (`X-API-Key` 헤더) | 단일 키 |
 | 월 비용 | ₩10,000 이하 | cost_tracker 필수 |
@@ -241,7 +241,7 @@ CREATE TABLE audit_logs (
 ```sql
 CREATE TABLE cost_logs (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    provider    TEXT NOT NULL,                  -- 'openai_embedding', 'openai_llm', 'anthropic', 'naver', 'kakao', 'google'
+    provider    TEXT NOT NULL,                  -- 'openai_embedding', 'gemini_llm', 'openai_llm', 'anthropic_llm', 'naver', 'kakao', 'google'
     action      TEXT NOT NULL,                  -- 'embed', 'chat', 'search', 'geocode'
     tokens_in   INTEGER,
     tokens_out  INTEGER,
@@ -376,6 +376,10 @@ class BaseLLM(ABC):
     @abstractmethod
     async def build_comparison(self, places: list[dict]) -> str: ...
 ```
+
+- MVP 기본 구현: `GeminiLLM` (`app/llm/gemini_llm.py`)
+- 런타임 교체 구현: `OpenAILLM`, `AnthropicLLM`를 `LLMRouter`에서 선택 가능하게 유지
+- 임베딩은 LLM provider와 분리하여 OpenAI 임베딩 클라이언트 사용
 
 #### FR-3.2: 질의 파싱 프롬프트
 LLM에게 보내는 시스템 프롬프트:

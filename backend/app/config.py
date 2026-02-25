@@ -15,11 +15,14 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = ""
 
-    # Anthropic (선택)
+    # Gemini (LLM)
+    gemini_api_key: str = ""
+
+    # Anthropic (LLM)
     anthropic_api_key: str = ""
 
     # 기본 LLM Provider
-    default_llm_provider: str = "openai"  # "openai" | "anthropic"
+    default_llm_provider: str = "gemini"  # "gemini" | "openai" | "anthropic"
 
     # 카카오
     kakao_rest_api_key: str = ""

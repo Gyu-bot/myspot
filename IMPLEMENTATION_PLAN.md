@@ -13,13 +13,17 @@
 ### 결정사항 동기화
 - 운영 DB: **Supabase PostgreSQL (Session Pooler URI)**
 - 이식성 원칙: Supabase 전용 기능 미사용 (SQLAlchemy + Alembic + 표준 PostgreSQL 기능만 사용)
-- 기본 LLM Provider: `openai`
+- 임베딩 모델: OpenAI `text-embedding-3-small` (고정)
+- 기본 LLM Provider: `gemini` (런타임에서 `openai`/`anthropic` 교체 가능)
 - 인증: 단일 API 키 (`X-API-Key`)
 - CORS: 개발용 `*`
 - 중복 병합: 자동 삭제 없음, 병합은 명시 API로만 수행
 
 ### 완료된 작업
-- [x] Phase 0 전체 완료 (설정/앱 골격/인증/헬스체크)
+- [x] Phase 0 백엔드 핵심 완료 (설정/앱 골격/인증/헬스체크)
+- [x] Phase 0 잔여 작업 (리포지토리 기준):
+  - `.env.example` 파일 생성
+  - `frontend/` 초기 스캐폴드(`package.json` 포함) 생성
 - [x] Phase 1 핵심 구현 완료:
   - SQLAlchemy 모델 구현 (`Place/ProviderLink/Source/Note/Visit/Tag/Media/Ontology/Relation/Embedding/AuditLog/CostLog`)
   - Alembic 초기 마이그레이션 생성/적용 (`d5bd684e2818`)
@@ -30,19 +34,30 @@
 - [x] 검증 완료:
   - `uv run ruff check .` 통과
   - `uv run ruff format --check .` 통과
-  - `uv run pytest -q` 통과 (`9 passed`)
-  - `uv run alembic current` → `d5bd684e2818 (head)`
+  - `uv run python -m pytest -q` 통과 (`9 passed`)
+  - `uv run python -m alembic current` → `d5bd684e2818 (head)`
+  - `uv run python - <<'PY' ... SELECT 1 ... PY` DB ping 통과
+
+### 진행률 요약 (2026-02-25 기준)
+- Phase 0: **완료 (약 95%)** — `.env.example`/`frontend` 스캐폴드 반영, 로컬 Docker 검증만 선택 잔여
+- Phase 1: **완료 (약 95%)** — 코어 CRUD/중복감지/병합/테스트 완료, geocoding/URL 메타추출은 후속
+- Phase 1.5: **계획 확정 (0%)** — DB 수동 입력 + 입력/조회 UI 우선 트랙
+- Phase 2: **미착수 (0%)** — 임베딩/검색 코어 서비스 미구현
+- Phase 3: **미착수 (0%)** — 온톨로지/LLM 코어 미구현
+- Phase 4: **미착수 (0%)** — 프론트 구조 생성 완료, 입력/조회 UI 미구현
+- Phase 5: **미착수 (0%)** — FastAPI 고급 API(`/search`, `/tools`, `/ontology`, `/admin`) 미구현
 
 ### 환경 정보
 - Python: 3.13.3 (`backend/.venv`)
 - uv: 0.6.14
 - Node.js: 25.6.1 / npm: 11.9.0
 - DB 연결: Supabase pooler + SSL(require) 정상
-- 참고: `backend/.env`는 루트 `.env`를 복사해 사용 중
+- 환경 파일: 루트 `.env.example`/`.env` 및 `backend/.env` 존재
 
 ### 현재 주의사항
-- `frontend/` 디렉터리는 아직 생성되지 않음.
-- 따라서 현재 `make setup`은 `cd frontend && npm install` 단계에서 실패할 수 있음.
+- `Makefile`의 `seed`/`costs` 타겟은 대응 코드(ontology seed 스크립트, admin costs API) 구현 전까지 실패함.
+- 현재도 `POST /api/v1/places` 등으로 수동 입력은 가능하지만, 대량 입력/검증/정리용 워크플로우는 별도 정리가 필요함.
+- 실행 순서는 "UI 입력/조회 → 임베딩 → 온톨로지/LLM → FastAPI 확장"으로 재배치함.
 
 ---
 
@@ -51,10 +66,12 @@
 위 "현재 상태"에 기술된 내용이 Phase 0의 전체 범위이다.
 
 ### Phase 0 검증 체크리스트
-- [x] `.env`/`backend/.env` 설정 완료
+- [x] `.env.example` 작성 및 루트 `.env` 초기화 플로우 정리
+- [x] `backend/.env` 설정 완료
 - [x] Supabase Session Pooler 연결 확인 (`SELECT 1`)
 - [x] 서버 기동 확인 (`cd backend && uv run uvicorn app.main:app --reload`)
 - [x] 헬스체크 확인 (`GET /health` → `{"status":"ok","db":"connected"}`)
+- [x] `frontend/` 초기화 (`package.json`, `vite`, `react`, `typescript`)
 - [ ] (선택) 로컬 Docker DB 기동 검증: `docker compose up -d`
 
 ---
@@ -175,9 +192,9 @@
 
 #### 모델 완료 후
 1. `app/models/__init__.py`에서 주석 해제하여 모든 모델 import
-2. `cd backend && uv run alembic revision --autogenerate -m "initial schema"`
+2. `cd backend && uv run python -m alembic revision --autogenerate -m "initial schema"`
 3. 생성된 마이그레이션 파일 수동 검토 (특히 GIN 인덱스, Geography 타입, ARRAY 타입)
-4. `uv run alembic upgrade head`
+4. `uv run python -m alembic upgrade head`
 
 ### 1.2 Pydantic 스키마 정의
 
@@ -399,19 +416,72 @@
   - `POST /sources`에서 URL 메타 추출(url_parser) 기본 구현
   - ProviderLink 자동 연결 고도화
 
-### 다음 착수 계획 (Phase 2)
-1. `providers/openai_embed.py` 구현 (single/batch embed + 비용 로깅)
-2. `services/embedding_service.py` 구현 (text_hash 기반 재생성 스킵)
-3. `services/search_service.py` 구현 (vector + keyword + filter + rank)
-4. `api/v1/search.py` 추가 및 `POST /api/v1/search` 연결
-5. `tests/test_search.py` 추가 후 회귀 통과
+### 다음 착수 계획 (업데이트: 2026-02-25, UI 선행 트랙)
+1. Phase 1.5 입력/조회 UI + DB 수동 입력 운영 (최우선, 3~5일)
+2. Phase 2 임베딩 파이프라인 (1~2일)
+3. Phase 3 온톨로지 + LLM 코어 (2~3일)
+4. Phase 5 FastAPI 확장(검색/툴/온톨로지 API) (2~3일)
+5. Phase 4B 검색/추천 UI 확장 (2~3일)
+
+---
+
+## Phase 1.5: DB 수동 입력 + 입력/조회 UI 우선 트랙 (신규)
+
+### 목표
+검색/임베딩 구현 전에 사용자가 장소 데이터를 미리 안정적으로 입력/조회/정리할 수 있는 경로를 먼저 완성한다.
+
+### 1.5.1 수동 입력 경로 확정 (API 우선)
+- 기존 CRUD API를 수동 입력 표준으로 확정:
+  - `POST /api/v1/places`
+  - `POST /api/v1/notes`
+  - `POST /api/v1/sources`
+  - `POST /api/v1/visits`
+  - `POST /api/v1/tags`
+- `docs/manual_data_entry.md` 작성:
+  - 필드별 필수/선택 입력 규칙
+  - 추천 입력 순서 (Place → Tag/Note → Source → Visit)
+  - 중복 감지/병합 절차 (`check-duplicates`, `/{id}/merge`)
+  - 실패 시 재시도 규칙
+
+### 1.5.2 대량 입력(사전 적재) 도구
+- `backend/scripts/import_places.py` 추가 (CSV/JSONL → API or DB 세션 입력)
+- 요구사항:
+  - dry-run 모드
+  - idempotent upsert 기준 (`canonical_name + phone + lat/lng` 보조키)
+  - 행 단위 에러 리포트(`failed_rows.csv`)
+  - 외부 API 호출 없이 사용자 입력만 저장 (정책 준수)
+
+### 1.5.3 입력 품질/정리 루프
+- 입력 직후 자동 점검:
+  - 이름 정규화 누락 필드 점검
+  - 전화번호 정규화 점검
+  - 좌표/주소 누락 점검 리포트
+- 중복 정리 배치:
+  - `check-duplicates` 결과를 모아 검토용 목록 생성
+  - 병합은 항상 수동 승인 후 `merge` 호출
+
+### 1.5.4 입력/조회 UI 선행 구현 (필수)
+- Phase 4 본개발 전, 최소 UI를 먼저 고정:
+  - `AddPlacePage`: 장소 + 태그 + 메모 입력, 중복 후보 즉시 확인
+  - `RecentPlacesPage`: 최근 입력 목록 조회(최신순, cursor 기반 더보기)
+  - `PlaceDetailLitePage`: 기본 정보/태그/메모/방문 이력 조회
+  - `DedupReviewPage`(선택): 후보 병합 승인/거부
+- 구현 범위는 "입력/조회 검증"에 필요한 최소 화면만 포함하고, 검색 UI는 제외
+
+### 1.5 완료 조건
+- [ ] 수동 입력 가이드 문서(`docs/manual_data_entry.md`) 작성 완료
+- [ ] 단건 입력: Place/Note/Source/Visit/Tag 입력 절차 검증 완료
+- [ ] 대량 입력 스크립트 1종(CSV 또는 JSONL) 동작 검증 완료
+- [ ] 중복 검토/병합 운영 절차 문서화 완료
+- [ ] 입력/조회 최소 UI(`AddPlacePage`, `RecentPlacesPage`, `PlaceDetailLitePage`) 동작 확인
+- [ ] 실제 사전 데이터 N건 입력 후 샘플 검수 완료 (N은 운영자가 결정)
 
 ---
 
 ## Phase 2: 임베딩 + 검색
 
 ### 목표
-자연어 검색이 동작하는 상태.
+임베딩 파이프라인과 검색 코어 로직(서비스 레이어)을 완성하는 상태.
 
 ### 2.1 OpenAI 임베딩 클라이언트
 
@@ -511,7 +581,7 @@ async def hybrid_search(db, request: SearchRequest) -> SearchResponse:
   - 이유: pgvector 쿼리와 PostGIS/ARRAY 필터를 합치면 인덱스 비효율
 ```
 
-### 2.4 검색 API
+### 2.4 검색 API (Phase 5로 이관)
 
 #### `backend/app/api/v1/search.py`
 ```
@@ -519,6 +589,7 @@ async def hybrid_search(db, request: SearchRequest) -> SearchResponse:
   1. search_service.hybrid_search() 호출
   2. 응답 반환
 ```
+위 엔드포인트 구현/노출은 "FastAPI 확장 마무리(Phase 5)"에서 진행한다.
 
 ### 2.5 Place 생성/수정 시 임베딩 연동
 
@@ -541,17 +612,17 @@ place_service.create_place()와 update_place()에서:
 
 ### Phase 2 완료 조건
 - [ ] 장소 생성 시 임베딩 자동 생성
-- [ ] `POST /api/v1/search` — 자연어 검색 동작
 - [ ] 벡터 유사도 + 키워드 매칭 + 필터 조합
 - [ ] 결과 랭킹 정상
+- [ ] 검색 서비스 단위 테스트 통과 (`search_service` 레벨)
 - [ ] pytest 전체 통과
 
 ---
 
-## Phase 3: 온톨로지 + LLM 도구
+## Phase 3: 온톨로지 + LLM 코어
 
 ### 목표
-온톨로지 확장 검색 + 에이전트 Tool 엔드포인트 동작.
+온톨로지/LLM 내부 로직을 완성하고, API 노출 없이 코어 동작을 검증한다.
 
 ### 3.1 온톨로지 서비스
 
@@ -602,13 +673,13 @@ class BaseLLM(ABC):
     async def build_comparison(self, places: list[dict]) -> str: ...
 ```
 
-#### `backend/app/llm/openai_llm.py`
+#### `backend/app/llm/gemini_llm.py`
 ```
-class OpenAILLM(BaseLLM):
-    model = "gpt-4o-mini"
+class GeminiLLM(BaseLLM):
+    model = "gemini-2.5-flash"
 
     async def chat(self, messages, **kwargs):
-      - openai.AsyncClient로 chat.completions.create()
+      - Gemini API 호출
       - cost_tracker.log_cost() 호출
 
     async def parse_search_intent(self, query):
@@ -623,11 +694,18 @@ class OpenAILLM(BaseLLM):
       - 장소 데이터 → Markdown 비교표 생성
 ```
 
+#### `backend/app/llm/openai_llm.py`
+```
+class OpenAILLM(BaseLLM):
+    model = "gpt-4o-mini"
+    - OpenAI Chat API 호출
+```
+
 #### `backend/app/llm/anthropic_llm.py`
 ```
 class AnthropicLLM(BaseLLM):
     model = "claude-sonnet-4-20250514"
-    - OpenAI와 동일한 인터페이스, Anthropic SDK 사용
+    - Anthropic Messages API 호출
 ```
 
 #### `backend/app/llm/router.py`
@@ -635,7 +713,9 @@ class AnthropicLLM(BaseLLM):
 class LLMRouter:
     def get_provider(self, provider: str | None = None) -> BaseLLM:
       - provider 지정 없으면 settings.default_llm_provider 사용
-      - "openai" → OpenAILLM(), "anthropic" → AnthropicLLM()
+      - "gemini" → GeminiLLM()
+      - "openai" → OpenAILLM()
+      - "anthropic" → AnthropicLLM()
 ```
 
 ### 3.4 검색에 LLM 질의 파싱 통합
@@ -657,7 +737,7 @@ search_service.hybrid_search()에서:
   - 또는 확장된 키워드로 추가 벡터 검색 수행 후 결과 병합
 ```
 
-### 3.6 Tool 엔드포인트
+### 3.6 Tool 엔드포인트 (Phase 5로 이관)
 
 #### `backend/app/api/v1/tools.py`
 ```
@@ -696,20 +776,21 @@ POST /api/v1/tools/{tool_name}
    출력: { "markdown": str, "places_ordered": list[PlaceBrief] }
 ```
 
-### 3.7 온톨로지 API
+### 3.7 온톨로지 API (Phase 5로 이관)
 
 #### `backend/app/api/v1/ontology.py`
 ```
 - GET /api/v1/ontology — 전체 온톨로지 트리
 - GET /api/v1/ontology/{namespace} — namespace별 트리
 ```
+위 API 노출은 "FastAPI 확장 마무리(Phase 5)"에서 진행한다.
 
 ### Phase 3 완료 조건
 - [ ] 온톨로지 시드 데이터 DB에 로드됨
 - [ ] "파스타" 검색 시 이탈리안/피자 등 확장 결과 포함
 - [ ] LLM 질의 파싱: "비 오는 날 조용한 데이트 코스" → 구조화된 필터
-- [ ] Tool 엔드포인트 6개 전체 동작
 - [ ] LLM Provider 교체 가능 (config만 변경)
+- [ ] LLM 코어 함수(parse/summarize/comparison/itinerary) 단위 테스트 통과
 - [ ] pytest 전체 통과
 
 ---
@@ -719,6 +800,9 @@ POST /api/v1/tools/{tool_name}
 ### 전제 조건
 - Node.js 설치: `nvm install --lts && nvm use --lts`
 - 또는 직접 설치
+- 실행 순서:
+  - Phase 4A(입력/조회 UI) 먼저 진행
+  - Phase 4B(검색/추천 UI)는 Phase 5 이후 진행
 
 ### 4.1 프론트엔드 프로젝트 초기화
 
@@ -761,22 +845,22 @@ npm install -D tailwindcss @tailwindcss/vite
 
 ### 4.3 페이지
 
+#### Phase 4A (선행): 입력/조회 UI
 #### `HomePage.tsx`
 ```
 - 최근 저장된 장소 카드 리스트 (최신 10개)
-- 빠른 검색 바 → SearchPage로 이동
+- 빠른 입력 버튼 → AddPlacePage로 이동
 - 즐겨찾기 장소 섹션
 ```
 
-#### `SearchPage.tsx`
+#### `RecentPlacesPage.tsx`
 ```
-- 검색 바 (자연어 입력)
-- 필터 칩: 카테고리, 분위기, 상황, 동행, 주차 등
-- 결과 카드 리스트: 장소명, 카테고리, 점수, 매칭 이유
-- 무한 스크롤 또는 "더보기"
+- 최근 입력 데이터 목록 조회(최신순, cursor pagination)
+- 필터: 즐겨찾기/카테고리(최소)
+- 상세 페이지로 이동
 ```
 
-#### `PlaceDetailPage.tsx`
+#### `PlaceDetailPage.tsx` (`PlaceDetailLitePage`로 시작 가능)
 ```
 - 장소 기본 정보 (이름, 주소, 카테고리, 태그)
 - 탭 구조: 메모 | 근거자료 | 방문기록
@@ -796,6 +880,15 @@ npm install -D tailwindcss @tailwindcss/vite
 - 병합 제안 목록
 - 각 제안: 두 장소 나란히 비교
 - 병합/무시 버튼
+```
+
+#### Phase 4B (후행): 검색/추천 UI
+#### `SearchPage.tsx`
+```
+- 검색 바 (자연어 입력)
+- 필터 칩: 카테고리, 분위기, 상황, 동행, 주차 등
+- 결과 카드 리스트: 장소명, 카테고리, 점수, 매칭 이유
+- 무한 스크롤 또는 "더보기"
 ```
 
 ### 4.4 컴포넌트
@@ -829,11 +922,39 @@ components/
 ```
 
 ### Phase 4 완료 조건
-- [ ] 장소 등록/수정/삭제 동작
-- [ ] 자연어 검색 + 필터 동작
-- [ ] 장소 상세 조회 (메모/근거/방문 포함)
-- [ ] 중복 병합 UI 동작
+- [ ] Phase 4A: 장소 등록/수정/삭제 동작
+- [ ] Phase 4A: 장소 목록/상세 조회(메모/근거/방문 포함)
+- [ ] Phase 4A: 중복 병합 UI 동작
+- [ ] Phase 4B: 자연어 검색 + 필터 동작
 - [ ] 반응형 레이아웃 (모바일 대응)
+
+---
+
+## Phase 5: FastAPI 확장 마무리 (마지막 단계)
+
+### 목표
+기존 CRUD FastAPI는 유지하고, 고급 기능용 API를 마지막에 일괄 노출한다.
+
+### 5.1 검색 API 노출
+- `POST /api/v1/search`
+- `search_service.hybrid_search()`와 연결
+- explain 옵션/필터 스키마 응답 안정화
+
+### 5.2 온톨로지/Tool API 노출
+- `GET /api/v1/ontology`
+- `GET /api/v1/ontology/{namespace}`
+- `POST /api/v1/tools/{tool_name}` 6종
+
+### 5.3 운영성 API 정리
+- 비용/운영 확인용 admin endpoint 정리 (예: `/api/v1/admin/costs`)
+- `Makefile`의 `costs` 타겟과 실제 엔드포인트 동기화
+
+### Phase 5 완료 조건
+- [ ] 검색 API(`/api/v1/search`) 동작
+- [ ] 온톨로지 API 동작
+- [ ] Tool API 6종 동작
+- [ ] admin costs API 동작 및 `make costs` 검증
+- [ ] FastAPI 확장 구간 테스트 통과
 
 ---
 
@@ -844,15 +965,18 @@ Phase 0 (셋업) ✅ 완료
     ↓
 Phase 1 (DB + CRUD) ✅ 완료
     ↓
-Phase 2 (임베딩 + 검색) ⏳ 다음 우선순위
+Phase 1.5 (입력/조회 UI + DB 수동 입력) ⏳ 다음 우선순위
     ↓
-Phase 3 (온톨로지 + LLM) ⏳ Phase 2 이후
+Phase 2 (임베딩 코어) ⏳ Phase 1.5 이후
     ↓
-Phase 4 (웹 UI) ⏳ frontend 초기화 후 진행
+Phase 3 (온톨로지 + LLM 코어) ⏳ Phase 2 이후
+    ↓
+Phase 5 (FastAPI 확장 마무리) ⏳ Phase 3 이후
+    ↓
+Phase 4B (검색/추천 UI 확장) ⏳ Phase 5 이후
 ```
 
-**참고**: Phase 4는 Phase 1만 완료되면 CRUD 기반 UI 먼저 개발 가능.
-검색 UI는 Phase 2 완료 후 추가.
+**참고**: 기존 CRUD FastAPI는 이미 동작 중이며, 마지막 단계는 "고급 API 확장" 범위다.
 
 ---
 
@@ -861,7 +985,7 @@ Phase 4 (웹 UI) ⏳ frontend 초기화 후 진행
 ### 실행 전 체크리스트 (모든 Phase)
 1. `.env` 파일 존재 확인 (`cp .env.example .env`)
 2. Supabase pooler `DATABASE_URL`/`ssl=require` 확인 + `backend/.env` 동기화
-3. `cd backend && uv run alembic upgrade head` — 마이그레이션 적용
+3. `cd backend && uv run python -m alembic upgrade head` — 마이그레이션 적용
 4. `cd backend && uv run uvicorn app.main:app --reload` — 서버 실행
 5. `curl http://127.0.0.1:8000/health` — 연결 상태 확인
 6. (선택) 로컬 이식성 점검 시 `docker compose up -d`로 동일 마이그레이션 재적용
