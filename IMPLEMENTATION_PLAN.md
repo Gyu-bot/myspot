@@ -41,10 +41,10 @@
 ### 진행률 요약 (2026-02-25 기준)
 - Phase 0: **완료 (약 95%)** — `.env.example`/`frontend` 스캐폴드 반영, 로컬 Docker 검증만 선택 잔여
 - Phase 1: **완료 (약 95%)** — 코어 CRUD/중복감지/병합/테스트 완료, geocoding/URL 메타추출은 후속
-- Phase 1.5: **계획 확정 (0%)** — DB 수동 입력 + 입력/조회 UI 우선 트랙
+- Phase 1.5: **진행 중 (약 40%)** — 수동 입력 문서/최소 UI 구현 완료, 데이터 적재 운영 단계 남음
 - Phase 2: **미착수 (0%)** — 임베딩/검색 코어 서비스 미구현
 - Phase 3: **미착수 (0%)** — 온톨로지/LLM 코어 미구현
-- Phase 4: **미착수 (0%)** — 프론트 구조 생성 완료, 입력/조회 UI 미구현
+- Phase 4: **부분 완료 (약 30%)** — 입력/조회 최소 UI 구현, 검색/추천 UI 미구현
 - Phase 5: **미착수 (0%)** — FastAPI 고급 API(`/search`, `/tools`, `/ontology`, `/admin`) 미구현
 
 ### 환경 정보
@@ -469,11 +469,11 @@
 - 구현 범위는 "입력/조회 검증"에 필요한 최소 화면만 포함하고, 검색 UI는 제외
 
 ### 1.5 완료 조건
-- [ ] 수동 입력 가이드 문서(`docs/manual_data_entry.md`) 작성 완료
+- [x] 수동 입력 가이드 문서(`docs/manual_data_entry.md`) 작성 완료
 - [ ] 단건 입력: Place/Note/Source/Visit/Tag 입력 절차 검증 완료
 - [ ] 대량 입력 스크립트 1종(CSV 또는 JSONL) 동작 검증 완료
 - [ ] 중복 검토/병합 운영 절차 문서화 완료
-- [ ] 입력/조회 최소 UI(`AddPlacePage`, `RecentPlacesPage`, `PlaceDetailLitePage`) 동작 확인
+- [x] 입력/조회 최소 UI(`AddPlacePage`, `RecentPlacesPage`, `PlaceDetailLitePage`) 동작 확인
 - [ ] 실제 사전 데이터 N건 입력 후 샘플 검수 완료 (N은 운영자가 결정)
 
 ---
